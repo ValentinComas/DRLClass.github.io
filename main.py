@@ -5,6 +5,15 @@ import gym
 from gym import wrappers, logger
 
 import matplotlib.pyplot as plt
+from numpy.random import choice
+
+def sampling(buffer, size):
+    sample = []
+    idx = choice(len(buffer), size)
+    print("idx = " , idx)
+    for i in idx:
+        sample.append(buffer[i])
+    return sample
 
 class RandomAgent(object):
     """The world's simplest agent!"""
@@ -40,13 +49,20 @@ if __name__ == '__main__':
 
     rewards = []
     episodes = []
+    buffer = []
+    buffer_max = 100000
 
     for i in range(episode_count):
         c_reward = 0
-        ob = env.reset()
+        state_base = env.reset()
+
         while True:
-            action = agent.act(ob, reward, done)
-            ob, reward, done, _ = env.step(action)
+            action = agent.act(state_base, reward, done)
+            state, reward, done, _ = env.step(action)
+            buffer.append((state_base, action, state, reward, done))
+            if len(buffer) > buffer_max :
+                buffer.pop()
+            state_base = state
             c_reward += reward
             if done:
                 break
@@ -55,6 +71,7 @@ if __name__ == '__main__':
             # Video is not recorded every episode, see capped_cubic_video_schedule for details.
         rewards.append(c_reward)
         episodes.append(i)
+    print(sampling(buffer, 3))
     plt.plot(rewards)
     plt.show()
     # Close the env and write monitor result info to disk
