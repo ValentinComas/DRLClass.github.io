@@ -14,12 +14,12 @@ from gym import wrappers, logger
 from DeepQNetwork import DeepQNetwork
 import matplotlib.pyplot as plt
 from random import choices
-from wrapper import Wrapper
+from wrapper import AtariPreprocessing
 
 
 #####################  hyper parameters  ####################
 
-EPSILON = 0.1
+EPSILON = .1
 MAX_EPISODES = 150
 MAX_EP_STEPS = 200
 GAMMA = 0.95     # reward discount
@@ -29,9 +29,8 @@ LEARNING_RATE = .001
 REFRESH_GAP = 1000
 EXPLORATION_DECAY = 0.995
 RENDER = False
-ACTION_DIM = 3
-ENV_DIM = [84,84]
-ENV_NAME = 'CartPole-v1'
+ACTION_DIM = 4
+ENV_DIM = [4,84,84]
 
 ###############################  Agent  ####################################
 class Agent():
@@ -43,11 +42,10 @@ class Agent():
         self.criterion = nn.MSELoss(reduction='sum')
         self.counter = 0
         self.eval_nn.conv1 = self.target_nn.conv1
-        self.eval_nn.bn1 = self.target_nn.bn1
         self.eval_nn.conv2 = self.target_nn.conv2
-        self.eval_nn.bn2 = self.target_nn.bn2
         self.eval_nn.conv3 = self.target_nn.conv3
-        self.eval_nn.bn3 = self.target_nn.bn3
+        self.eval_nn.f = self.target_nn.f
+        self.eval_nn.f2 = self.target_nn.f2
 
     def choose_action(self, s):
         s = torch.unsqueeze(torch.FloatTensor(s), 0)
@@ -58,7 +56,7 @@ class Agent():
         
     def optimize_model(self, file):
         batch = random.sample(self.memory, BATCH_SIZE)
-
+        
         # batch_s = torch.FloatTensor([batch[0][0]])
         # batch_a = torch.LongTensor([batch[0][1]])
         # batch_r = torch.FloatTensor([batch[0][3]])
@@ -77,8 +75,8 @@ class Agent():
         # qValues_target = qValues_target * (1 - batch_d)
         # JO = torch.pow(qValues - (batch_r + qValues_target),2)
         for s, a, s_, r, done in batch:
-            qValues = (self.eval_nn(torch.tensor(s).float()))[a]
-            qValues_ = self.target_nn(torch.tensor(s_).float())
+            qValues = (self.eval_nn(torch.tensor(s).float().unsqueeze(0)))[a]
+            qValues_ = self.target_nn(torch.tensor(s_).float().unsqueeze(0))
             qValues_target = GAMMA * torch.max(qValues_)
             JO = pow(qValues - (r + (qValues_target * (1 -done))), 2)
             loss = self.criterion(qValues, JO)
@@ -91,9 +89,11 @@ class Agent():
         self.counter += 1
         if self.counter % REFRESH_GAP == 0:  
             torch.save(self.eval_nn, file)
-            self.target_nn.fc1 = self.eval_nn.fc1
-            self.target_nn.fc2 = self.eval_nn.fc2
-            self.target_nn.out = self.eval_nn.out
+            self.eval_nn.conv1 = self.target_nn.conv1
+            self.eval_nn.conv2 = self.target_nn.conv2
+            self.eval_nn.conv3 = self.target_nn.conv3
+            self.eval_nn.f = self.target_nn.f
+            self.eval_nn.f2 = self.target_nn.f2
 
     def store_transition(self, value):
         self.memory.append(value)
@@ -104,39 +104,35 @@ class Agent():
 
 if __name__ == '__main__':
     counter = 0
-    env = Wrapper()
-
+    env = AtariPreprocessing()
+    
     file = "model/model"
     if len(sys.argv) > 1:
         file += str(sys.argv[1])
     file += ".pt"
-    print(1 * True)
-    print(1 * False)
 
     ag = Agent()
 
     t1 = time.time()
     for i in range(MAX_EPISODES):
+        done = False
         s = env.reset()
         ep_reward = 0
-        done_f = False
+        print("Start Ep ", i)
         while True:
-            if not(done_f):
-                a = 0
+            if random.random() < EPSILON:
+                a = random.randint(0,3)
             else:
-                if random.random() < EPSILON:
-                    a = random.randint(0,2)
-                else:
-                    output = ag.eval_nn(torch.FloatTensor(s))
-                    a = int(torch.argmax(output))
-
-            sn, r, done, done_f = env.step(a)
-            if done :
-                r = -10
+                output = ag.eval_nn(torch.FloatTensor(s).unsqueeze(0))
+                a = int(torch.argmax(output))
+            print(a)
+            sn, r, done, _ = env.step(a)
+            # print(sn, r, done)
             ag.store_transition((s, a, sn, r, done))
+            s = sn
+            
             if len(ag.memory) >= BATCH_SIZE:
                 ag.optimize_model(file)
-            s = sn
             ep_reward += r
             if done:
                 print('Episode:', i, ' Reward: %i' % int(ep_reward), )

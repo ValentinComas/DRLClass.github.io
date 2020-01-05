@@ -4,24 +4,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, inputs, outputs):
+    def __init__(self, inputs, output):
         super(DeepQNetwork, self).__init__()
-        self.conv1 = nn.Conv2d(4, 16, kernel_size=5, stride=2)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.inputs = inputs
+        self.output = output
 
-        def conv2d_size_out(size, kernel_size = 5, stride = 2):
-            return (size - (kernel_size - 1) - 1) // stride  + 1
-        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(inputs[0])))
-        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(inputs[1])))
-        linear_input_size = convw * convh * 32
-        self.head = nn.Linear(linear_input_size, outputs)
+        self.conv1 = nn.Conv2d(4, 32, kernel_size=4)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=4)
+        self.f = nn.Linear(self.feature_size(), 64)
+        self.f2 = nn.Linear(64, output)
 
     def forward(self, x):
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))
-        return self.head(x.view(x.size(0), -1))
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.view(x.size()[0], -1)
+        x = F.relu(self.f(x))
+        x = self.f2(x)
+        return x[0]
+
+    def feature_size(self):
+        x = torch.zeros(1, *self.inputs)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        return x.view(1, -1).size(1)
