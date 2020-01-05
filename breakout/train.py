@@ -125,8 +125,7 @@ if __name__ == '__main__':
             else:
                 output = ag.eval_nn(torch.FloatTensor(s).unsqueeze(0))
                 a = int(torch.argmax(output))
-            print(a)
-            sn, r, done, _ = env.step(a)
+            sn, r, done, died = env.step(a)
             # print(sn, r, done)
             ag.store_transition((s, a, sn, r, done))
             s = sn
